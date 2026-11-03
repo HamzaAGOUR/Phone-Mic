@@ -32,6 +32,7 @@ class MainActivity : Activity() {
     private lateinit var micLevelFill: View
     private lateinit var micLevelText: TextView
     private lateinit var silentMicHint: TextView
+    private lateinit var muteButton: Button
     private lateinit var preferences: SharedPreferences
 
     private var streamer: MicStreamer? = null
@@ -39,6 +40,8 @@ class MainActivity : Activity() {
     private var streamGeneration = 0
     private var displayedMicLevel = 0.0
     private var silentSinceMs = 0L
+    private var isMuted = false
+    private var streamingIp: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,9 +56,11 @@ class MainActivity : Activity() {
         micLevelFill = findViewById(R.id.micLevelFill)
         micLevelText = findViewById(R.id.micLevelText)
         silentMicHint = findViewById(R.id.silentMicHint)
+        muteButton = findViewById(R.id.muteButton)
         preferences = getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
 
         startStopButton.setOnClickListener { onStartStopClicked() }
+        muteButton.setOnClickListener { toggleMute() }
         ipInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
                 startStopButton.performClick()
@@ -153,26 +158,37 @@ class MainActivity : Activity() {
     private fun handleStreamerStatus(status: MicStreamer.Status) {
         when (status) {
             MicStreamer.Status.Starting -> {
+                streamingIp = null
                 showStartingUi()
                 showStatus(getString(R.string.status_starting), R.color.status_starting)
             }
 
             is MicStreamer.Status.Streaming -> {
+                streamingIp = status.ipAddress
                 showStreamingUi()
-                showStatus(
-                    getString(R.string.status_streaming, status.ipAddress),
-                    R.color.status_success,
-                )
+                if (isMuted) {
+                    showStatus(
+                        getString(R.string.status_muted, status.ipAddress),
+                        R.color.status_starting,
+                    )
+                } else {
+                    showStatus(
+                        getString(R.string.status_streaming, status.ipAddress),
+                        R.color.status_success,
+                    )
+                }
             }
 
             MicStreamer.Status.Stopped -> {
                 streamer = null
+                streamingIp = null
                 showIdleUi()
                 showStatus(getString(R.string.status_stopped), R.color.status_neutral)
             }
 
             is MicStreamer.Status.Error -> {
                 streamer = null
+                streamingIp = null
                 showIdleUi()
                 showStatus(errorMessage(status.kind), R.color.status_error)
             }
@@ -186,6 +202,7 @@ class MainActivity : Activity() {
         startStopButton.text = getString(R.string.start_streaming)
         startStopButton.setBackgroundResource(R.drawable.bg_button_start)
         micLevelPanel.visibility = View.GONE
+        resetMuteState()
         resetMicLevel()
     }
 
@@ -196,6 +213,7 @@ class MainActivity : Activity() {
         startStopButton.text = getString(R.string.start_streaming_progress)
         startStopButton.setBackgroundResource(R.drawable.bg_button_start)
         micLevelPanel.visibility = View.GONE
+        resetMuteState()
         resetMicLevel()
     }
 
@@ -214,18 +232,22 @@ class MainActivity : Activity() {
      * microphone (privacy toggle, mic mute, or another app holding it).
      */
     private fun showMicLevel(level: Int) {
+        if (isMuted) {
+            displayedMicLevel = 0.0
+            updateMeterFill(0.0)
+            micLevelText.text = getString(R.string.mic_level_zero)
+            silentSinceMs = 0L
+            silentMicHint.visibility = View.GONE
+            return
+        }
+
         displayedMicLevel = if (level >= displayedMicLevel) {
             level.toDouble()
         } else {
             maxOf(0.0, displayedMicLevel - 6)
         }
 
-        val fillWidth = (micLevelTrack.width * (displayedMicLevel / 100.0)).toInt()
-        val params = micLevelFill.layoutParams
-        if (params.width != fillWidth) {
-            params.width = fillWidth
-            micLevelFill.layoutParams = params
-        }
+        updateMeterFill(displayedMicLevel)
         micLevelText.text = getString(
             R.string.mic_level_percent,
             displayedMicLevel.toInt(),
@@ -244,12 +266,56 @@ class MainActivity : Activity() {
         silentMicHint.visibility = if (silent) View.VISIBLE else View.GONE
     }
 
+    private fun toggleMute() {
+        val activeStreamer = streamer ?: return
+
+        isMuted = !isMuted
+        activeStreamer.setMuted(isMuted)
+
+        if (isMuted) {
+            muteButton.setText(R.string.unmute_microphone)
+            muteButton.setBackgroundResource(R.drawable.bg_button_unmute)
+            muteButton.setTextColor(getColor(R.color.danger_dark))
+            showMicLevel(0)
+            streamingIp?.let { ipAddress ->
+                showStatus(
+                    getString(R.string.status_muted, ipAddress),
+                    R.color.status_starting,
+                )
+            }
+        } else {
+            muteButton.setText(R.string.mute_microphone)
+            muteButton.setBackgroundResource(R.drawable.bg_button_mute)
+            muteButton.setTextColor(getColor(R.color.primary_dark))
+            streamingIp?.let { ipAddress ->
+                showStatus(
+                    getString(R.string.status_streaming, ipAddress),
+                    R.color.status_success,
+                )
+            }
+        }
+    }
+
+    private fun resetMuteState() {
+        isMuted = false
+        muteButton.setText(R.string.mute_microphone)
+        muteButton.setBackgroundResource(R.drawable.bg_button_mute)
+        muteButton.setTextColor(getColor(R.color.primary_dark))
+    }
+
+    private fun updateMeterFill(percent: Double) {
+        val fillWidth = (micLevelTrack.width * (percent / 100.0)).toInt()
+        val params = micLevelFill.layoutParams
+        if (params.width != fillWidth) {
+            params.width = fillWidth
+            micLevelFill.layoutParams = params
+        }
+    }
+
     private fun resetMicLevel() {
         displayedMicLevel = 0.0
         silentSinceMs = 0L
-        val params = micLevelFill.layoutParams
-        params.width = 0
-        micLevelFill.layoutParams = params
+        updateMeterFill(0.0)
         micLevelText.text = getString(R.string.mic_level_percent, 0)
         silentMicHint.visibility = View.GONE
     }

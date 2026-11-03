@@ -173,7 +173,7 @@
                             Margin="0,10,0,0"
                             FontSize="12"
                             Foreground="#B45309"
-                            Text="The phone is connected but sending silence. Check the microphone mute or privacy setting on the phone, and make sure no other app is using the microphone."
+                            Text="The phone is connected but sending silence. Check the phone's mute button, microphone privacy setting, or whether another app is using the microphone."
                             TextWrapping="Wrap"
                             Visibility="Collapsed" />
                     </StackPanel>

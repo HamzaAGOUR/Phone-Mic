@@ -25,4 +25,15 @@ internal object AudioProtocol {
         packet[2] = (sequence shr 8).toByte()
         packet[3] = sequence.toByte()
     }
+
+    /**
+     * Replaces the PCM payload with digital silence while leaving the sequence
+     * header untouched. Used by the mute button so the stream stays connected.
+     */
+    fun silencePcm(packet: ByteArray) {
+        require(packet.size >= SEQUENCE_HEADER_BYTES) {
+            "Packet is too small for the sequence header"
+        }
+        packet.fill(0, SEQUENCE_HEADER_BYTES, packet.size)
+    }
 }

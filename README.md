@@ -24,6 +24,7 @@ What works in this build:
 - VB-Cable is detected automatically. The app selects **CABLE Input (VB-Audio Virtual Cable)** when it is installed.
 - A **Test with speakers instead** checkbox lets you check the audio through your normal speakers.
 - The PC window shows the address to enter on the phone and reports **Receiving** while audio is arriving.
+- A **Mute microphone** button on the phone silences the outgoing audio while keeping the PC connected.
 - If VB-Cable is missing, the app shows a warning and a button that opens the VB-Cable download page.
 
 The jitter buffer and VB-Cable routing are the two features that make this build usable as a PC microphone. Both apps now show a live microphone level. Later stages add background streaming, reconnect, saved settings, a tray icon, and an automatic firewall rule.
@@ -108,6 +109,8 @@ adb install -r android\app\build\outputs\apk\debug\app-debug.apk
 3. Tap **Start streaming**.
 4. The first time, Android asks for microphone permission. Phone Mic shows an explanation first. Choose **Continue**, then allow the microphone.
 5. The phone should show **Streaming to ...** and the PC should show **Receiving**.
+
+To silence the microphone without stopping the stream, tap **Mute microphone** under the level meter. The phone changes to **Muted · streaming to ...** and sends silence, so the PC stays connected and **Receiving**. Tap **Unmute microphone** to resume.
 
 > **Keep the Phone Mic app open during this test.** This build runs the microphone inside the main screen. It stops when the app leaves the foreground. The screen is kept awake while streaming. Background streaming arrives in Stage 5.
 

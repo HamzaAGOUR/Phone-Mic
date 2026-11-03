@@ -46,15 +46,30 @@ class MicStreamer(
     @Volatile
     private var socket: DatagramSocket? = null
 
+    /**
+     * When true the capture thread keeps running but replaces the PCM with
+     * silence, so the PC stays connected without hearing the microphone.
+     */
+    @Volatile
+    private var muted = false
+
     fun start(ipAddress: String) {
         if (!running.compareAndSet(false, true)) return
 
+        muted = false
         listener(Status.Starting)
         val thread = Thread({ runStream(ipAddress) }, "PhoneMicCapture").apply {
             isDaemon = true
         }
         worker = thread
         thread.start()
+    }
+
+    /**
+     * Mutes or unmutes the outgoing audio without interrupting the stream.
+     */
+    fun setMuted(muted: Boolean) {
+        this.muted = muted
     }
 
     /**
@@ -141,10 +156,15 @@ class MicStreamer(
                 }
                 if (!completeChunk) break
 
-                // Report the raw microphone level about ten times per second
-                // so the UI can show whether capture is actually producing
-                // sound. Exact digital silence usually means Android is
-                // muting the microphone.
+                // Muting keeps the same packet cadence and sequence numbers,
+                // but sends digital silence so the PC does not disconnect.
+                if (muted) {
+                    AudioProtocol.silencePcm(packet)
+                }
+
+                // Report the level of the packet being sent about ten times per
+                // second. When muted this is zero. Otherwise, exact digital
+                // silence usually means Android is muting the microphone.
                 if (sequence % LEVEL_REPORT_INTERVAL == 0u) {
                     reportLevel(packet)
                 }
@@ -172,6 +192,7 @@ class MicStreamer(
             }
         } finally {
             running.set(false)
+            muted = false
             unblockCaptureThread()
             releaseAudioRecord()
             socket = null

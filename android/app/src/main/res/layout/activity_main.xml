@@ -182,6 +182,20 @@
                     android:background="@drawable/bg_level_fill" />
             </FrameLayout>
 
+            <Button
+                android:id="@+id/muteButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_button_mute"
+                android:elevation="0dp"
+                android:fontFamily="sans-serif-medium"
+                android:stateListAnimator="@null"
+                android:text="@string/mute_microphone"
+                android:textAllCaps="false"
+                android:textColor="@color/primary_dark"
+                android:textSize="15sp" />
+
             <TextView
                 android:id="@+id/silentMicHint"
                 android:layout_width="match_parent"

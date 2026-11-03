@@ -15,6 +15,10 @@
     <string name="status_starting">Starting microphone…</string>
     <string name="status_stopping">Stopping…</string>
     <string name="status_streaming">Streaming to %1$s</string>
+    <string name="status_muted">Muted · streaming to %1$s</string>
+
+    <string name="mute_microphone">Mute microphone</string>
+    <string name="unmute_microphone">Unmute microphone</string>
 
     <string name="mic_level_label">MIC LEVEL</string>
     <string name="mic_level_zero">0%</string>

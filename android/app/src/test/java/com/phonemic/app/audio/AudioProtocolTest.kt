@@ -42,4 +42,22 @@ class AudioProtocolTest {
             packet.copyOfRange(0, AudioProtocol.SEQUENCE_HEADER_BYTES),
         )
     }
+
+    @Test
+    fun silencePcmKeepsTheSequenceHeader() {
+        val packet = ByteArray(AudioProtocol.PACKET_BYTES) { 0x7F }
+        AudioProtocol.writeSequenceHeader(packet, 42u)
+
+        AudioProtocol.silencePcm(packet)
+
+        assertArrayEquals(
+            byteArrayOf(0, 0, 0, 42),
+            packet.copyOfRange(0, AudioProtocol.SEQUENCE_HEADER_BYTES),
+        )
+        assertEquals(
+            0,
+            packet.copyOfRange(AudioProtocol.SEQUENCE_HEADER_BYTES, packet.size)
+                .count { it != 0.toByte() },
+        )
+    }
 }
