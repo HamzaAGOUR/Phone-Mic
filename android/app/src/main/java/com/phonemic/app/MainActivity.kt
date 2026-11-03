@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
@@ -26,11 +27,18 @@ class MainActivity : Activity() {
     private lateinit var startStopButton: Button
     private lateinit var statusText: TextView
     private lateinit var statusDot: View
+    private lateinit var micLevelPanel: View
+    private lateinit var micLevelTrack: View
+    private lateinit var micLevelFill: View
+    private lateinit var micLevelText: TextView
+    private lateinit var silentMicHint: TextView
     private lateinit var preferences: SharedPreferences
 
     private var streamer: MicStreamer? = null
     private var pendingStartIp: String? = null
     private var streamGeneration = 0
+    private var displayedMicLevel = 0.0
+    private var silentSinceMs = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,6 +48,11 @@ class MainActivity : Activity() {
         startStopButton = findViewById(R.id.startStopButton)
         statusText = findViewById(R.id.statusText)
         statusDot = findViewById(R.id.statusDot)
+        micLevelPanel = findViewById(R.id.micLevelPanel)
+        micLevelTrack = findViewById(R.id.micLevelTrack)
+        micLevelFill = findViewById(R.id.micLevelFill)
+        micLevelText = findViewById(R.id.micLevelText)
+        silentMicHint = findViewById(R.id.silentMicHint)
         preferences = getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
 
         startStopButton.setOnClickListener { onStartStopClicked() }
@@ -109,13 +122,22 @@ class MainActivity : Activity() {
         // Ignore callbacks from an older stream if the user stops and starts
         // again quickly while queued UI messages are still arriving.
         val generation = ++streamGeneration
-        val newStreamer = MicStreamer { status ->
-            runOnUiThread {
-                if (generation == streamGeneration && !isFinishing && !isDestroyed) {
-                    handleStreamerStatus(status)
+        val newStreamer = MicStreamer(
+            listener = { status ->
+                runOnUiThread {
+                    if (generation == streamGeneration && !isFinishing && !isDestroyed) {
+                        handleStreamerStatus(status)
+                    }
                 }
-            }
-        }
+            },
+            onLevelChanged = { level ->
+                runOnUiThread {
+                    if (generation == streamGeneration && !isFinishing && !isDestroyed) {
+                        showMicLevel(level)
+                    }
+                }
+            },
+        )
         streamer = newStreamer
         newStreamer.start(ipAddress)
     }
@@ -163,6 +185,8 @@ class MainActivity : Activity() {
         startStopButton.isEnabled = true
         startStopButton.text = getString(R.string.start_streaming)
         startStopButton.setBackgroundResource(R.drawable.bg_button_start)
+        micLevelPanel.visibility = View.GONE
+        resetMicLevel()
     }
 
     private fun showStartingUi() {
@@ -171,6 +195,8 @@ class MainActivity : Activity() {
         startStopButton.isEnabled = false
         startStopButton.text = getString(R.string.start_streaming_progress)
         startStopButton.setBackgroundResource(R.drawable.bg_button_start)
+        micLevelPanel.visibility = View.GONE
+        resetMicLevel()
     }
 
     private fun showStreamingUi() {
@@ -179,6 +205,53 @@ class MainActivity : Activity() {
         startStopButton.isEnabled = true
         startStopButton.text = getString(R.string.stop_streaming)
         startStopButton.setBackgroundResource(R.drawable.bg_button_stop)
+        micLevelPanel.visibility = View.VISIBLE
+    }
+
+    /**
+     * Draws the 0..100 microphone level with fast attack and slow release.
+     * A stream of exact digital silence usually means Android is muting the
+     * microphone (privacy toggle, mic mute, or another app holding it).
+     */
+    private fun showMicLevel(level: Int) {
+        displayedMicLevel = if (level >= displayedMicLevel) {
+            level.toDouble()
+        } else {
+            maxOf(0.0, displayedMicLevel - 6)
+        }
+
+        val fillWidth = (micLevelTrack.width * (displayedMicLevel / 100.0)).toInt()
+        val params = micLevelFill.layoutParams
+        if (params.width != fillWidth) {
+            params.width = fillWidth
+            micLevelFill.layoutParams = params
+        }
+        micLevelText.text = getString(
+            R.string.mic_level_percent,
+            displayedMicLevel.toInt(),
+        )
+
+        if (level < 2) {
+            if (silentSinceMs == 0L) {
+                silentSinceMs = SystemClock.elapsedRealtime()
+            }
+        } else {
+            silentSinceMs = 0L
+        }
+
+        val silent = silentSinceMs != 0L &&
+            SystemClock.elapsedRealtime() - silentSinceMs >= SILENCE_HINT_DELAY_MS
+        silentMicHint.visibility = if (silent) View.VISIBLE else View.GONE
+    }
+
+    private fun resetMicLevel() {
+        displayedMicLevel = 0.0
+        silentSinceMs = 0L
+        val params = micLevelFill.layoutParams
+        params.width = 0
+        micLevelFill.layoutParams = params
+        micLevelText.text = getString(R.string.mic_level_percent, 0)
+        silentMicHint.visibility = View.GONE
     }
 
     private fun showStatus(message: String, colorResource: Int) {
@@ -308,5 +381,6 @@ class MainActivity : Activity() {
         const val REQUEST_RECORD_AUDIO = 100
         const val PREFERENCES_NAME = "phone_mic"
         const val KEY_AUDIO_PERMISSION_ASKED = "audio_permission_asked"
+        const val SILENCE_HINT_DELAY_MS = 3000L
     }
 }

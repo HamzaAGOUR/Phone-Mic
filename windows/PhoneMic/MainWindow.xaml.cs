@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Net.Sockets;
@@ -22,12 +23,18 @@ public partial class MainWindow : Window
     private static readonly Brush ErrorBrush =
         new SolidColorBrush(Color.FromRgb(185, 28, 28));
 
+    private const int SilenceHintDelayMs = 3000;
+    private const int AudibleLevelPercent = 2;
+
     private readonly DispatcherTimer _statusTimer;
 
     private UdpAudioReceiver? _receiver;
     private AudioOutput? _audio;
     private IReadOnlyList<AudioDevice> _devices = Array.Empty<AudioDevice>();
     private long _lastPacketTickCount;
+    private int _latestMicLevelPercent;
+    private double _displayedMicLevel;
+    private long _silentSinceTickCount;
     private string? _fatalMessage;
     private volatile string? _receiverWarning;
     private bool _closing;
@@ -235,6 +242,11 @@ public partial class MainWindow : Window
     {
         Interlocked.Exchange(ref _lastPacketTickCount, Environment.TickCount64);
         _receiverWarning = null;
+
+        // Measure the raw PCM before it reaches the jitter buffer. If this
+        // stays at zero while packets arrive, the phone is capturing silence.
+        Volatile.Write(ref _latestMicLevelPercent, CalculateMicLevelPercent(e.Pcm));
+
         _audio?.AddPacket(e.SequenceNumber, e.Pcm);
     }
 
@@ -281,6 +293,8 @@ public partial class MainWindow : Window
 
         bool receiving = packetAgeMs is >= 0 and <= 500;
 
+        UpdateMicLevel(receiving);
+
         if (!receiving && _receiverWarning != null)
         {
             SetStatus(_receiverWarning, ErrorBrush);
@@ -295,6 +309,65 @@ public partial class MainWindow : Window
         {
             SetStatus("Waiting for phone...", NeutralBrush);
         }
+    }
+
+    /// <summary>
+    /// Converts one 10 ms PCM packet to a 0-100 meter value on a -60..0 dBFS
+    /// scale. Digital silence is exactly zero, which distinguishes a muted
+    /// phone microphone from very quiet sound.
+    /// </summary>
+    private static int CalculateMicLevelPercent(byte[] pcm)
+    {
+        int sampleCount = pcm.Length / 2;
+        if (sampleCount == 0) return 0;
+
+        double sumSquares = 0;
+        for (int i = 0; i + 1 < pcm.Length; i += 2)
+        {
+            short sample = BinaryPrimitives.ReadInt16LittleEndian(pcm.AsSpan(i, 2));
+            sumSquares += (double)sample * sample;
+        }
+
+        double rms = Math.Sqrt(sumSquares / sampleCount);
+        if (rms < 1) return 0;
+
+        double decibels = 20 * Math.Log10(rms / 32768d);
+        double percent = (decibels + 60d) / 60d * 100d;
+        return Math.Clamp((int)Math.Round(percent), 0, 100);
+    }
+
+    private void UpdateMicLevel(bool receiving)
+    {
+        int target = receiving ? Volatile.Read(ref _latestMicLevelPercent) : 0;
+
+        // Fast attack and slow release keep short speech peaks readable.
+        _displayedMicLevel = target >= _displayedMicLevel
+            ? target
+            : Math.Max(0, _displayedMicLevel - 6);
+
+        double trackWidth = MicLevelTrack.ActualWidth;
+        MicLevelFill.Width = Math.Max(0, trackWidth * (_displayedMicLevel / 100d));
+        MicLevelText.Text = $"{Math.Round(_displayedMicLevel):0}%";
+
+        long now = Environment.TickCount64;
+
+        // Warn only after three seconds of exact digital silence. Real
+        // microphone noise normally keeps the meter above zero.
+        if (receiving && target < AudibleLevelPercent)
+        {
+            if (_silentSinceTickCount == 0) _silentSinceTickCount = now;
+        }
+        else
+        {
+            _silentSinceTickCount = 0;
+        }
+
+        bool showSilenceHint = _silentSinceTickCount != 0 &&
+            now - _silentSinceTickCount >= SilenceHintDelayMs;
+
+        SilentMicHint.Visibility = showSilenceHint
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void OnOutputDeviceChanged(object sender, SelectionChangedEventArgs e)

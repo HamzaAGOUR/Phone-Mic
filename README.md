@@ -12,7 +12,7 @@ Turn an Android phone into a microphone for a Windows PC over Wi-Fi.
   </a>
 </p>
 
-## Current build: Stage 3, PC microphone mode
+## Current build: Stage 4, PC microphone mode
 
 This build can now be used as a microphone in Discord, Zoom, OBS, and other Windows apps that accept a microphone.
 
@@ -26,7 +26,7 @@ What works in this build:
 - The PC window shows the address to enter on the phone and reports **Receiving** while audio is arriving.
 - If VB-Cable is missing, the app shows a warning and a button that opens the VB-Cable download page.
 
-The jitter buffer and VB-Cable routing are the two features that make this build usable as a PC microphone. Later stages add level meters, background streaming, reconnect, saved settings, a tray icon, and an automatic firewall rule.
+The jitter buffer and VB-Cable routing are the two features that make this build usable as a PC microphone. Both apps now show a live microphone level. Later stages add background streaming, reconnect, saved settings, a tray icon, and an automatic firewall rule.
 
 ## What you need
 
@@ -169,12 +169,25 @@ netsh advfirewall firewall add rule name="Phone Mic UDP 48123" dir=in action=all
 
 ### The PC says "Receiving", but Discord/Zoom/OBS hears nothing
 
-1. Check that **CABLE Input (VB-Audio Virtual Cable)** is selected in the Phone Mic output dropdown.
-2. Check that **CABLE Output (VB-Audio Virtual Cable)** is selected as the microphone in Discord/Zoom/OBS. These names are easy to mix up.
-3. Open Windows **Settings > System > Sound > Volume mixer** and make sure Phone Mic is not muted and its volume is not at zero.
-4. In Windows **Settings > System > Sound > More sound settings > Recording**, open **CABLE Output**, go to **Levels**, and make sure it is not muted or at zero.
-5. In the other app, disable noise suppression or automatic gain control temporarily and test again. Some noise gates cut quiet speech.
-6. Turn off **Test with speakers instead** in Phone Mic. If it is on, audio goes to the speakers instead of CABLE Input.
+1. Look at **MIC LEVEL** in the PC app. If it stays at **0%** for more than three seconds, the phone is sending silence — see the next section.
+2. Check that **CABLE Input (VB-Audio Virtual Cable)** is selected in the Phone Mic output dropdown.
+3. Check that **CABLE Output (VB-Audio Virtual Cable)** is selected as the microphone in Discord/Zoom/OBS. These names are easy to mix up.
+4. Open Windows **Settings > System > Sound > Volume mixer** and make sure Phone Mic is not muted and its volume is not at zero.
+5. In Windows **Settings > System > Sound > More sound settings > Recording**, open **CABLE Output**, go to **Levels**, and make sure it is not muted or at zero.
+6. In the other app, disable noise suppression or automatic gain control temporarily and test again. Some noise gates cut quiet speech.
+7. Turn off **Test with speakers instead** in Phone Mic. If it is on, audio goes to the speakers instead of CABLE Input.
+
+### MIC LEVEL stays at 0% (the phone sends silence)
+
+Both apps show a live microphone meter. If the phone says **Streaming** and the PC says **Receiving**, but both meters stay at **0%**, Android is muting the microphone:
+
+1. On Android 12 and newer, open the phone's Quick Settings and check the microphone privacy toggle. If microphone access is off, apps receive silence.
+2. On Samsung phones, check the **Mute microphone** toggle in Quick Settings or the sound panel.
+3. Close other apps that may be using the microphone, such as a voice recorder, a call, the camera, or a video meeting.
+4. Test the microphone in the phone's built-in recorder app. If it is also silent there, the problem is the phone's microphone or privacy setting, not Phone Mic.
+5. Restart the phone, then try streaming again.
+
+If the PC meter is above 0% but you still hear nothing, the phone is sending audio correctly and the problem is on the PC output side. Use the steps in the previous section.
 
 ### Audio is heard on the speakers, but not in Discord
 
@@ -237,11 +250,10 @@ Connect the PC to Wi-Fi or Ethernet, then restart Phone Mic. The app only displa
 - Enable "Install unknown apps" for the file manager or browser you use to open the APK.
 - If the install still fails, uninstall an older Phone Mic build first, then try again.
 
-## Stage 3 limitations
+## Stage 4 limitations
 
 These are intentionally deferred to later stages:
 
-- No live input/output level meters yet.
 - No foreground service, notification, wake lock, or Wi-Fi lock. The phone must stay on the Phone Mic screen.
 - No automatic reconnect after a network drop.
 - The PC output device is auto-selected each launch. A manually chosen device is not remembered yet.
@@ -311,7 +323,7 @@ This is an incremental build. The remaining milestones are:
 1. ~~Android streams to the PC; the PC plays through speakers.~~ **Done**
 2. ~~Add the jitter buffer and silence-on-loss on the PC.~~ **Done in this build**
 3. ~~Add VB-Cable device selection and detection.~~ **Done in this build**
-4. Add live level meters and finish the status/IP display.
+4. ~~Add live level meters and finish the status/IP display.~~ **Done in this build**
 5. Move Android capture into a foreground service with a Wi-Fi lock, wake lock, and battery-optimization prompt.
 6. Add auto-reconnect, saved settings, tray icon, and automatic firewall rule.
 

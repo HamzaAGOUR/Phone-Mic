@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class MicStreamer(
     private val listener: (Status) -> Unit,
+    private val onLevelChanged: (Int) -> Unit = {},
 ) {
     sealed interface Status {
         data object Starting : Status
@@ -140,6 +141,14 @@ class MicStreamer(
                 }
                 if (!completeChunk) break
 
+                // Report the raw microphone level about ten times per second
+                // so the UI can show whether capture is actually producing
+                // sound. Exact digital silence usually means Android is
+                // muting the microphone.
+                if (sequence % LEVEL_REPORT_INTERVAL == 0u) {
+                    reportLevel(packet)
+                }
+
                 AudioProtocol.writeSequenceHeader(packet, sequence)
 
                 try {
@@ -241,6 +250,20 @@ class MicStreamer(
         return true
     }
 
+    /**
+     * Reports the raw microphone level about ten times per second so the UI
+     * can show whether capture is actually producing sound.
+     */
+    private fun reportLevel(packet: ByteArray) {
+        val level = AudioLevel.percent(packet)
+        try {
+            onLevelChanged(level)
+        } catch (t: Throwable) {
+            // A UI callback must never stop the capture thread.
+            Log.w(TAG, "Microphone level callback failed", t)
+        }
+    }
+
     private fun unblockCaptureThread() {
         // AudioRecord.stop() wakes a blocking read. Catch errors because the
         // capture thread may be releasing the same object at the same time.
@@ -267,5 +290,8 @@ class MicStreamer(
 
     private companion object {
         const val TAG = "MicStreamer"
+
+        // 100 packets per second, so every tenth packet is about 100 ms.
+        val LEVEL_REPORT_INTERVAL = 10u
     }
 }

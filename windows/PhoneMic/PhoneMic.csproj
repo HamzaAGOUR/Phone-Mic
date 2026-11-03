@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>PhoneMic</AssemblyName>
     <RootNamespace>PhoneMic</RootNamespace>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>

@@ -16,6 +16,11 @@
     <string name="status_stopping">Stopping…</string>
     <string name="status_streaming">Streaming to %1$s</string>
 
+    <string name="mic_level_label">MIC LEVEL</string>
+    <string name="mic_level_zero">0%</string>
+    <string name="mic_level_percent">%1$d%%</string>
+    <string name="mic_silent_hint">Your phone is sending silence. Check the microphone mute or privacy setting, and make sure no other app is using the microphone.</string>
+
     <string name="error_invalid_ip">Enter a valid IPv4 address, for example 192.168.1.23.</string>
     <string name="error_microphone_permission">Microphone permission is required to stream audio.</string>
     <string name="error_microphone_unavailable">Could not start the microphone. Check that no other app is using it, then try again.</string>
