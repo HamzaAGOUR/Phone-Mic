@@ -1,0 +1,22 @@
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+android/.kotlin/
+*.iml
+
+# Windows / .NET
+windows/**/bin/
+windows/**/obj/
+windows/.vs/
+windows/publish/
+*.user
+*.suo
+
+# Editors and OS files
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Phone Mic</string>
+    <string name="app_tagline">Use your phone as a microphone for your PC over Wi-Fi.</string>
+    <string name="credit">Made by Hamza AGOUR</string>
+    <string name="repository_url">https://github.com/HamzaAGOUR/Phone-Mic</string>
+    <string name="pc_ip_label">PC IP ADDRESS</string>
+    <string name="pc_ip_hint">192.168.1.23</string>
+
+    <string name="start_streaming">Start streaming</string>
+    <string name="stop_streaming">Stop streaming</string>
+    <string name="start_streaming_progress">Starting…</string>
+
+    <string name="status_stopped">Stopped</string>
+    <string name="status_starting">Starting microphone…</string>
+    <string name="status_stopping">Stopping…</string>
+    <string name="status_streaming">Streaming to %1$s</string>
+
+    <string name="error_invalid_ip">Enter a valid IPv4 address, for example 192.168.1.23.</string>
+    <string name="error_microphone_permission">Microphone permission is required to stream audio.</string>
+    <string name="error_microphone_unavailable">Could not start the microphone. Check that no other app is using it, then try again.</string>
+    <string name="error_network">Could not send audio. Check that both devices are on the same Wi-Fi network, then try again.</string>
+    <string name="error_unknown">Something went wrong while streaming. Please try again.</string>
+
+    <string name="permission_title">Microphone access</string>
+    <string name="permission_message">Phone Mic needs to record your voice and send it directly to your PC over your local Wi-Fi network. Audio is not recorded or uploaded anywhere else.</string>
+    <string name="permission_continue">Continue</string>
+    <string name="permission_not_now">Not now</string>
+    <string name="permission_blocked_title">Microphone access is blocked</string>
+    <string name="permission_blocked_message">Android is blocking microphone access. Open the app settings and allow Microphone, then come back and press Start streaming.</string>
+    <string name="open_settings">Open settings</string>
+    <string name="cancel">Cancel</string>
+
+    <string name="stage_one_note">This build streams while the app is open. Keep Phone Mic in front while using it. Background streaming is coming in a later update.</string>
+    <string name="privacy_note">Audio goes directly to your PC on your local network. Nothing is recorded or uploaded.</string>
+    <string name="port_note">UDP port 48123</string>
+</resources>
