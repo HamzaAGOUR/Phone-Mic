@@ -1,16 +1,23 @@
 package com.phonemic.app
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ComponentName
 import android.content.Intent
+import android.content.ServiceConnection
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
+import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
@@ -35,13 +42,43 @@ class MainActivity : Activity() {
     private lateinit var muteButton: Button
     private lateinit var preferences: SharedPreferences
 
-    private var streamer: MicStreamer? = null
+    private var streamService: MicStreamService? = null
+    private var serviceBinding = false
+    private var uiActive = false
+    private var startRequested = false
     private var pendingStartIp: String? = null
-    private var streamGeneration = 0
     private var displayedMicLevel = 0.0
     private var silentSinceMs = 0L
     private var isMuted = false
-    private var streamingIp: String? = null
+
+    private val serviceListener = object : MicStreamService.Listener {
+        override fun onStreamStateChanged() {
+            runOnUiThread {
+                if (uiActive) renderServiceState()
+            }
+        }
+
+        override fun onMicLevelChanged(level: Int) {
+            runOnUiThread {
+                if (uiActive) showMicLevel(level)
+            }
+        }
+    }
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            val localBinder = binder as? MicStreamService.LocalBinder ?: return
+            if (!uiActive) return
+
+            streamService = localBinder.service
+            localBinder.service.setListener(serviceListener)
+            renderServiceState()
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            streamService = null
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,27 +110,41 @@ class MainActivity : Activity() {
         showStatus(getString(R.string.status_stopped), R.color.status_neutral)
     }
 
-    override fun onStop() {
-        // Stage 1 captures inside the Activity. Stopping when the app is no
-        // longer visible avoids a misleading "Streaming" status while Android
-        // restricts background microphone access. Stage 5 moves this into a
-        // foreground service so streaming can continue with the screen off.
-        if (streamer != null) {
-            stopStreaming()
+    override fun onStart() {
+        super.onStart()
+        uiActive = true
+
+        if (!serviceBinding) {
+            val intent = Intent(this, MicStreamService::class.java)
+            serviceBinding = try {
+                bindService(intent, serviceConnection, BIND_AUTO_CREATE)
+            } catch (e: Exception) {
+                Log.e(TAG, "Could not bind the streaming service", e)
+                false
+            }
         }
+    }
+
+    override fun onStop() {
+        uiActive = false
+        streamService?.setListener(null)
+
+        if (serviceBinding) {
+            unbindService(serviceConnection)
+            serviceBinding = false
+        }
+        streamService = null
+        clearKeepScreenOn()
         super.onStop()
     }
 
     override fun onDestroy() {
-        streamGeneration++
-        streamer?.stop()
-        streamer = null
         clearKeepScreenOn()
         super.onDestroy()
     }
 
     private fun onStartStopClicked() {
-        if (streamer != null) {
+        if (startRequested || streamService?.isActive == true) {
             stopStreaming()
             return
         }
@@ -115,58 +166,111 @@ class MainActivity : Activity() {
             return
         }
 
+        continueStart(ipAddress)
+    }
+
+    /**
+     * Continues the start flow after the microphone permission is available.
+     * Android 13 also needs notification permission for the foreground service
+     * notification. Denying it does not stop streaming, so it is asked once.
+     */
+    private fun continueStart(ipAddress: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED &&
+            !preferences.getBoolean(KEY_NOTIFICATION_PERMISSION_ASKED, false)
+        ) {
+            pendingStartIp = ipAddress
+            preferences.edit()
+                .putBoolean(KEY_NOTIFICATION_PERMISSION_ASKED, true)
+                .apply()
+            requestPermissions(
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                REQUEST_NOTIFICATIONS,
+            )
+            return
+        }
+
         beginStreaming(ipAddress)
     }
 
     private fun beginStreaming(ipAddress: String) {
         hideKeyboard()
         pendingStartIp = null
+        startRequested = true
         showStartingUi()
         showStatus(getString(R.string.status_starting), R.color.status_starting)
 
-        // Ignore callbacks from an older stream if the user stops and starts
-        // again quickly while queued UI messages are still arriving.
-        val generation = ++streamGeneration
-        val newStreamer = MicStreamer(
-            listener = { status ->
-                runOnUiThread {
-                    if (generation == streamGeneration && !isFinishing && !isDestroyed) {
-                        handleStreamerStatus(status)
-                    }
-                }
-            },
-            onLevelChanged = { level ->
-                runOnUiThread {
-                    if (generation == streamGeneration && !isFinishing && !isDestroyed) {
-                        showMicLevel(level)
-                    }
-                }
-            },
-        )
-        streamer = newStreamer
-        newStreamer.start(ipAddress)
+        val intent = Intent(this, MicStreamService::class.java)
+            .setAction(MicStreamService.ACTION_START)
+            .putExtra(MicStreamService.EXTRA_IP_ADDRESS, ipAddress)
+
+        try {
+            startForegroundService(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not start background streaming", e)
+            startRequested = false
+            showIdleUi()
+            showStatus(getString(R.string.error_background_start), R.color.status_error)
+        }
     }
 
     private fun stopStreaming() {
-        if (streamer == null) return
-
+        startRequested = false
         startStopButton.isEnabled = false
         showStatus(getString(R.string.status_stopping), R.color.status_neutral)
-        streamer?.stop()
+
+        val service = streamService
+        if (service != null) {
+            service.stopStreaming()
+            return
+        }
+
+        try {
+            startService(
+                Intent(this, MicStreamService::class.java)
+                    .setAction(MicStreamService.ACTION_STOP),
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not stop the streaming service", e)
+            showIdleUi()
+            showStatus(getString(R.string.status_stopped), R.color.status_neutral)
+        }
     }
 
-    private fun handleStreamerStatus(status: MicStreamer.Status) {
-        when (status) {
+    /**
+     * Rebuilds the screen from the service. This runs when the Activity
+     * reconnects after being in the background, so the UI returns to the
+     * correct state instead of showing a stale "Stopped" screen.
+     */
+    private fun renderServiceState() {
+        val service = streamService
+        if (service == null) {
+            startRequested = false
+            showIdleUi()
+            showStatus(getString(R.string.status_stopped), R.color.status_neutral)
+            return
+        }
+
+        when (val status = service.streamStatus) {
+            null -> {
+                startRequested = false
+                showIdleUi()
+                showStatus(getString(R.string.status_stopped), R.color.status_neutral)
+            }
+
             MicStreamer.Status.Starting -> {
-                streamingIp = null
+                startRequested = true
                 showStartingUi()
                 showStatus(getString(R.string.status_starting), R.color.status_starting)
             }
 
             is MicStreamer.Status.Streaming -> {
-                streamingIp = status.ipAddress
+                startRequested = false
                 showStreamingUi()
-                if (isMuted) {
+                applyMuteState(service.isMuted)
+
+                if (service.isMuted) {
                     showStatus(
                         getString(R.string.status_muted, status.ipAddress),
                         R.color.status_starting,
@@ -177,18 +281,19 @@ class MainActivity : Activity() {
                         R.color.status_success,
                     )
                 }
+
+                showMicLevel(service.currentLevel)
+                maybeShowBatteryOptimizationPrompt()
             }
 
             MicStreamer.Status.Stopped -> {
-                streamer = null
-                streamingIp = null
+                startRequested = false
                 showIdleUi()
                 showStatus(getString(R.string.status_stopped), R.color.status_neutral)
             }
 
             is MicStreamer.Status.Error -> {
-                streamer = null
-                streamingIp = null
+                startRequested = false
                 showIdleUi()
                 showStatus(errorMessage(status.kind), R.color.status_error)
             }
@@ -267,40 +372,72 @@ class MainActivity : Activity() {
     }
 
     private fun toggleMute() {
-        val activeStreamer = streamer ?: return
+        val service = streamService ?: return
+        service.setMuted(!service.isMuted)
+    }
 
-        isMuted = !isMuted
-        activeStreamer.setMuted(isMuted)
+    /**
+     * Asks once whether Phone Mic may ignore battery optimization. This is
+     * Android's standard exemption for services that must keep running with
+     * the screen off. Declining leaves normal foreground-service behavior.
+     */
+    private fun maybeShowBatteryOptimizationPrompt() {
+        if (preferences.getBoolean(KEY_BATTERY_PROMPT_SHOWN, false)) return
 
-        if (isMuted) {
-            muteButton.setText(R.string.unmute_microphone)
-            muteButton.setBackgroundResource(R.drawable.bg_button_unmute)
-            muteButton.setTextColor(getColor(R.color.danger_dark))
-            showMicLevel(0)
-            streamingIp?.let { ipAddress ->
-                showStatus(
-                    getString(R.string.status_muted, ipAddress),
-                    R.color.status_starting,
-                )
+        val powerManager = getSystemService(PowerManager::class.java)
+        preferences.edit()
+            .putBoolean(KEY_BATTERY_PROMPT_SHOWN, true)
+            .apply()
+
+        if (powerManager.isIgnoringBatteryOptimizations(packageName)) return
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.battery_title)
+            .setMessage(R.string.battery_message)
+            .setPositiveButton(R.string.battery_open_settings) { _, _ ->
+                openBatterySettings()
             }
-        } else {
-            muteButton.setText(R.string.mute_microphone)
-            muteButton.setBackgroundResource(R.drawable.bg_button_mute)
-            muteButton.setTextColor(getColor(R.color.primary_dark))
-            streamingIp?.let { ipAddress ->
-                showStatus(
-                    getString(R.string.status_streaming, ipAddress),
-                    R.color.status_success,
+            .setNegativeButton(R.string.permission_not_now, null)
+            .show()
+    }
+
+    // This app is distributed as a sideloaded APK, not through Google Play, so
+    // the Play policy cited by the BatteryLife lint check does not apply.
+    @SuppressLint("BatteryLife")
+    private fun openBatterySettings() {
+        try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:$packageName"),
+                ),
+            )
+        } catch (_: Exception) {
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
                 )
+            } catch (_: Exception) {
+                // The README has manual battery settings instructions.
             }
         }
     }
 
+    private fun applyMuteState(muted: Boolean) {
+        isMuted = muted
+        if (muted) {
+            muteButton.setText(R.string.unmute_microphone)
+            muteButton.setBackgroundResource(R.drawable.bg_button_unmute)
+            muteButton.setTextColor(getColor(R.color.danger_dark))
+        } else {
+            muteButton.setText(R.string.mute_microphone)
+            muteButton.setBackgroundResource(R.drawable.bg_button_mute)
+            muteButton.setTextColor(getColor(R.color.primary_dark))
+        }
+    }
+
     private fun resetMuteState() {
-        isMuted = false
-        muteButton.setText(R.string.mute_microphone)
-        muteButton.setBackgroundResource(R.drawable.bg_button_mute)
-        muteButton.setTextColor(getColor(R.color.primary_dark))
+        applyMuteState(false)
     }
 
     private fun updateMeterFill(percent: Double) {
@@ -330,6 +467,7 @@ class MainActivity : Activity() {
     private fun errorMessage(kind: MicStreamer.ErrorKind): String = when (kind) {
         MicStreamer.ErrorKind.MICROPHONE -> getString(R.string.error_microphone_unavailable)
         MicStreamer.ErrorKind.NETWORK -> getString(R.string.error_network)
+        MicStreamer.ErrorKind.BACKGROUND -> getString(R.string.error_background_start)
         MicStreamer.ErrorKind.UNKNOWN -> getString(R.string.error_unknown)
     }
 
@@ -379,6 +517,15 @@ class MainActivity : Activity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
+        if (requestCode == REQUEST_NOTIFICATIONS) {
+            val ipAddress = pendingStartIp
+            pendingStartIp = null
+            if (ipAddress != null) {
+                beginStreaming(ipAddress)
+            }
+            return
+        }
+
         if (requestCode != REQUEST_RECORD_AUDIO) return
 
         val ipAddress = pendingStartIp
@@ -387,7 +534,7 @@ class MainActivity : Activity() {
             grantResults[0] == PackageManager.PERMISSION_GRANTED
 
         if (granted && ipAddress != null) {
-            beginStreaming(ipAddress)
+            continueStart(ipAddress)
             return
         }
 
@@ -445,8 +592,12 @@ class MainActivity : Activity() {
 
     private companion object {
         const val REQUEST_RECORD_AUDIO = 100
+        const val REQUEST_NOTIFICATIONS = 101
         const val PREFERENCES_NAME = "phone_mic"
         const val KEY_AUDIO_PERMISSION_ASKED = "audio_permission_asked"
+        const val KEY_NOTIFICATION_PERMISSION_ASKED = "notification_permission_asked"
+        const val KEY_BATTERY_PROMPT_SHOWN = "battery_prompt_shown"
         const val SILENCE_HINT_DELAY_MS = 3000L
+        const val TAG = "MainActivity"
     }
 }

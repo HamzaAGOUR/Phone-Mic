@@ -29,7 +29,15 @@
     <string name="error_microphone_permission">Microphone permission is required to stream audio.</string>
     <string name="error_microphone_unavailable">Could not start the microphone. Check that no other app is using it, then try again.</string>
     <string name="error_network">Could not send audio. Check that both devices are on the same Wi-Fi network, then try again.</string>
+    <string name="error_background_start">Android did not allow Phone Mic to run in the background. Keep the app open and try again.</string>
     <string name="error_unknown">Something went wrong while streaming. Please try again.</string>
+
+    <string name="notification_channel_name">Microphone streaming</string>
+    <string name="notification_channel_description">Shows when Phone Mic is sending audio to your PC.</string>
+
+    <string name="battery_title">Keep streaming in the background</string>
+    <string name="battery_message">Android may stop Phone Mic when the screen is off. Allow Phone Mic to run without battery restrictions so it keeps streaming.</string>
+    <string name="battery_open_settings">Open settings</string>
 
     <string name="permission_title">Microphone access</string>
     <string name="permission_message">Phone Mic needs to record your voice and send it directly to your PC over your local Wi-Fi network. Audio is not recorded or uploaded anywhere else.</string>
@@ -40,7 +48,7 @@
     <string name="open_settings">Open settings</string>
     <string name="cancel">Cancel</string>
 
-    <string name="stage_one_note">This build streams while the app is open. Keep Phone Mic in front while using it. Background streaming is coming in a later update.</string>
+    <string name="background_note">Phone Mic keeps streaming while you use other apps or turn off the screen. A notification lets you mute or stop it. If your phone stops the stream, set battery usage for Phone Mic to Unrestricted in Android settings.</string>
     <string name="privacy_note">Audio goes directly to your PC on your local network. Nothing is recorded or uploaded.</string>
     <string name="port_note">UDP port 48123</string>
 </resources>

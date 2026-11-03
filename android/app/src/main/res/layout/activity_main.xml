@@ -213,7 +213,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="28dp"
             android:lineSpacingExtra="3dp"
-            android:text="@string/stage_one_note"
+            android:text="@string/background_note"
             android:textColor="@color/text_secondary"
             android:textSize="13sp" />
 

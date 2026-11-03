@@ -12,13 +12,16 @@ Turn an Android phone into a microphone for a Windows PC over Wi-Fi.
   </a>
 </p>
 
-## Current build: Stage 4, PC microphone mode
+## Current build: Stage 5, background streaming
 
-This build can now be used as a microphone in Discord, Zoom, OBS, and other Windows apps that accept a microphone.
+This build can be used as a microphone in Discord, Zoom, OBS, and other Windows apps that accept a microphone. The phone can stay in your pocket with the screen off.
 
 What works in this build:
 
 - The Android app captures 48 kHz mono microphone audio and sends it over UDP.
+- The Android app keeps streaming while you use other apps, lock the phone, or turn off the screen.
+- A persistent notification shows the connection and lets you mute or stop the microphone without opening the app.
+- A wake lock and a Wi-Fi lock keep the CPU and network responsive with the screen off.
 - The Windows app receives the audio, smooths out Wi-Fi jitter with a 40 ms buffer, and fills short gaps with silence.
 - The Windows app can play into **VB-Cable**, so other apps see **CABLE Output** as a real microphone.
 - VB-Cable is detected automatically. The app selects **CABLE Input (VB-Audio Virtual Cable)** when it is installed.
@@ -27,7 +30,7 @@ What works in this build:
 - A **Mute microphone** button on the phone silences the outgoing audio while keeping the PC connected.
 - If VB-Cable is missing, the app shows a warning and a button that opens the VB-Cable download page.
 
-The jitter buffer and VB-Cable routing are the two features that make this build usable as a PC microphone. Both apps now show a live microphone level. Later stages add background streaming, reconnect, saved settings, a tray icon, and an automatic firewall rule.
+The jitter buffer and VB-Cable routing are the two features that make this build usable as a PC microphone. Both apps show a live microphone level. Later stages add automatic reconnect, saved settings, a tray icon, and an automatic firewall rule.
 
 ## What you need
 
@@ -108,11 +111,16 @@ adb install -r android\app\build\outputs\apk\debug\app-debug.apk
 2. Type the IP address shown in the Windows app. For example: `192.168.1.23`.
 3. Tap **Start streaming**.
 4. The first time, Android asks for microphone permission. Phone Mic shows an explanation first. Choose **Continue**, then allow the microphone.
-5. The phone should show **Streaming to ...** and the PC should show **Receiving**.
+5. On Android 13 and newer, Android may also ask to show notifications. Allow it so the ongoing notification can mute or stop the stream. If you deny it, streaming still works, but the notification is hidden.
+6. The phone should show **Streaming to ...** and the PC should show **Receiving**.
 
 To silence the microphone without stopping the stream, tap **Mute microphone** under the level meter. The phone changes to **Muted · streaming to ...** and sends silence, so the PC stays connected and **Receiving**. Tap **Unmute microphone** to resume.
 
-> **Keep the Phone Mic app open during this test.** This build runs the microphone inside the main screen. It stops when the app leaves the foreground. The screen is kept awake while streaming. Background streaming arrives in Stage 5.
+You can now switch to another app, lock the phone, or turn off the screen. Phone Mic keeps streaming and shows a notification with **Mute microphone** and **Stop streaming** buttons. Use those buttons if you do not want to reopen the app.
+
+The first time you stream, Phone Mic may ask to run without battery restrictions. Choose **Open settings** and allow it so Android does not stop the stream when the screen is off. You can change this later in Android settings.
+
+> **If the stream stops after a while**, Android's battery manager may be stopping the service. Set battery usage for Phone Mic to **Unrestricted** in Android settings. On Samsung phones, also check **Settings > Battery > Background usage limits** and add Phone Mic to **Never sleeping apps**. See [The stream stops when the screen is off](#the-stream-stops-when-the-screen-is-off-or-the-app-is-in-the-background).
 
 ## Step 5: Select the microphone in Discord, Zoom, or OBS
 
@@ -158,7 +166,7 @@ Work through these in order:
    - Go to **Firewall & network protection** > **Allow an app through firewall**.
    - Find **PhoneMic** or **Phone Mic** and allow it on **Private** networks.
    - If it is not listed, use the manual command below.
-   - Stage 3 uses the normal Windows prompt, which may allow both public and private networks. Stage 6 will create a Private-only rule automatically.
+   - The current build uses the normal Windows prompt, which may allow both public and private networks. Stage 6 will create a Private-only rule automatically.
 3. **Check for the wrong adapter.** VPNs and virtual adapters can hide the real LAN address. Disconnect the VPN, restart Phone Mic, and use the newly displayed address.
 4. **Check Wi-Fi isolation.** Guest Wi-Fi and some managed networks block phone-to-PC traffic. Try a normal home Wi-Fi network.
 5. **Close extra copies.** Only one copy of Phone Mic can listen on UDP port 48123. Close other copies and restart the app.
@@ -228,9 +236,16 @@ Another app may be holding the microphone, or Android may have denied permission
 3. Choose **Allow**.
 4. Return to Phone Mic and tap **Start streaming**.
 
-### The phone stops streaming when the screen turns off or the app is minimized
+### The stream stops when the screen is off or the app is in the background
 
-This is expected in Stage 3. The microphone currently runs inside the main screen. Keep Phone Mic open and in front while using it. Stage 5 moves capture into a foreground service with a Wi-Fi lock, wake lock, and a persistent notification so it can continue with the screen off.
+Phone Mic runs as a foreground service with a wake lock and Wi-Fi lock, so it is designed to keep streaming with the screen off. If it still stops:
+
+1. Check that the ongoing **Phone Mic** notification is visible while streaming. If you denied notification permission, open Android **Settings > Apps > Phone Mic > Permissions > Notifications** and allow it.
+2. Open Android **Settings > Apps > Phone Mic > Battery** (or **Battery usage**) and choose **Unrestricted**. On Samsung phones, also open **Settings > Battery > Background usage limits** and add Phone Mic to **Never sleeping apps**.
+3. Do not use **Force stop** on Phone Mic. Android does not allow a force-stopped app to restart in the background.
+4. If your phone has a "deep sleep" or "app freeze" mode, exclude Phone Mic from it.
+5. Some phones pause microphone access during calls or when another app is recording. Stop the call or close the other recording app.
+6. If Wi-Fi disconnects while the screen is off, open Android **Settings > Network & internet > Wi-Fi > Wi-Fi preferences** and make sure Wi-Fi stays on during sleep.
 
 ### "Could not listen on UDP port 48123"
 
@@ -253,16 +268,16 @@ Connect the PC to Wi-Fi or Ethernet, then restart Phone Mic. The app only displa
 - Enable "Install unknown apps" for the file manager or browser you use to open the APK.
 - If the install still fails, uninstall an older Phone Mic build first, then try again.
 
-## Stage 4 limitations
+## Stage 5 limitations
 
 These are intentionally deferred to later stages:
 
-- No foreground service, notification, wake lock, or Wi-Fi lock. The phone must stay on the Phone Mic screen.
-- No automatic reconnect after a network drop.
+- No automatic reconnect after a network drop. If Wi-Fi drops, stop and start the stream again.
 - The PC output device is auto-selected each launch. A manually chosen device is not remembered yet.
 - No tray icon or automatic firewall rule.
 - No installer. The Windows app is a folder with `PhoneMic.exe` and its DLLs.
 - Jitter buffer size is fixed at about 40 ms.
+- Some phone manufacturers apply extra battery restrictions to background apps. See [The stream stops when the screen is off](#the-stream-stops-when-the-screen-is-off-or-the-app-is-in-the-background).
 
 ## How it works
 
@@ -327,7 +342,7 @@ This is an incremental build. The remaining milestones are:
 2. ~~Add the jitter buffer and silence-on-loss on the PC.~~ **Done in this build**
 3. ~~Add VB-Cable device selection and detection.~~ **Done in this build**
 4. ~~Add live level meters and finish the status/IP display.~~ **Done in this build**
-5. Move Android capture into a foreground service with a Wi-Fi lock, wake lock, and battery-optimization prompt.
+5. ~~Move Android capture into a foreground service with a Wi-Fi lock, wake lock, and battery-optimization guidance.~~ **Done in this build**
 6. Add auto-reconnect, saved settings, tray icon, and automatic firewall rule.
 
 ---

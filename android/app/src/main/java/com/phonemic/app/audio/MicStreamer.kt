@@ -15,8 +15,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Captures the microphone on a dedicated audio thread and sends raw PCM over UDP.
  *
- * Stage 1 keeps this object inside the Activity. Stage 5 will host the same
- * capture logic in a foreground service so it survives the screen turning off.
+ * [com.phonemic.app.MicStreamService] owns this object so capture continues
+ * while the app is in the background or the screen is off.
  */
 class MicStreamer(
     private val listener: (Status) -> Unit,
@@ -32,6 +32,7 @@ class MicStreamer(
     enum class ErrorKind {
         MICROPHONE,
         NETWORK,
+        BACKGROUND,
         UNKNOWN,
     }
 
@@ -208,9 +209,9 @@ class MicStreamer(
         }
     }
 
-    // The caller (currently MainActivity) checks RECORD_AUDIO immediately
-    // before starting this stream. Any SecurityException is caught by
-    // runStream() and surfaced as a microphone error.
+    // The foreground service checks RECORD_AUDIO before starting this stream.
+    // Any SecurityException is caught by runStream() and surfaced as a
+    // microphone error.
     @SuppressLint("MissingPermission")
     private fun createAudioRecord(): AudioRecord {
         val minBufferBytes = AudioRecord.getMinBufferSize(
