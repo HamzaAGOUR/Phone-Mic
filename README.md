@@ -2,6 +2,16 @@
 
 Turn an Android phone into a microphone for a Windows PC over Wi-Fi.
 
+<p align="center">
+  <a href="https://github.com/HamzaAGOUR/Phone-Mic/releases/latest/download/PhoneMic-Android.apk">
+    <img height="42" src="https://img.shields.io/badge/Download-Android%20APK-2563EB?style=for-the-badge&logo=android&logoColor=white" alt="Download the Android APK" />
+  </a>
+  &nbsp;
+  <a href="https://github.com/HamzaAGOUR/Phone-Mic/releases/latest/download/PhoneMic-Windows.zip">
+    <img height="42" src="https://img.shields.io/badge/Download-Windows%20app-1D4ED8?style=for-the-badge&logo=windows&logoColor=white" alt="Download the Windows app" />
+  </a>
+</p>
+
 ## Current build: Stage 3, PC microphone mode
 
 This build can now be used as a microphone in Discord, Zoom, OBS, and other Windows apps that accept a microphone.
@@ -37,7 +47,12 @@ phone-mic/
 
 ## Ready-built files
 
-After building the project, the two files needed for testing are:
+The two buttons at the top download the latest built versions from [GitHub Releases](https://github.com/HamzaAGOUR/Phone-Mic/releases/latest):
+
+- **Android APK:** `PhoneMic-Android.apk`
+- **Windows app:** `PhoneMic-Windows.zip` (extract it, then run `PhoneMic.exe`)
+
+If you build the project yourself, the outputs are:
 
 - **Windows app:** `windows\publish\PhoneMic.exe` (keep the other files in that folder next to it)
 - **Android APK:** `android\app\build\outputs\apk\debug\app-debug.apk`
